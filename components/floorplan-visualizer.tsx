@@ -1,101 +1,178 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import type { Floor, FloorplanRoom } from "@/types/floorplan"
 import { cn } from "@/lib/utils"
 
-interface FloorplanVisualizerProps {
-  floor: Floor
-  onRoomClick: (room: FloorplanRoom) => void
-  onFloorClick: () => void
+interface RoomGeometry {
+  room: FloorplanRoom
+  points: { x: number; z: number }[]
+  center: { x: number; z: number }
+}
+
+interface WorldBounds {
+  minX: number
+  maxX: number
+  minZ: number
+  maxZ: number
+}
+
+interface ViewTransform {
+  scale: number
+  tx: number
+  tz: number
+}
+
+const ROOM_FILL_COLOR = "rgba(148, 163, 184, 0.18)"
+const ROOM_FILL_COLOR_HOVER = "rgba(59, 130, 246, 0.35)"
+const ROOM_STROKE_COLOR = "rgba(59, 130, 246, 0.85)"
+const ROOM_STROKE_WIDTH = 2
+const ROOM_STROKE_WIDTH_HOVER = 2.5
+
+function samePoint(a?: { x: number; z: number } | null, b?: { x: number; z: number } | null) {
+  return !!a && !!b && a.x === b.x && a.z === b.z
+}
+
+function centroid(points: { x: number; z: number }[]): { x: number; z: number } {
+  if (points.length === 0) return { x: 0, z: 0 }
+  const sum = points.reduce(
+    (acc, point) => ({ x: acc.x + point.x, z: acc.z + point.z }),
+    { x: 0, z: 0 },
+  )
+  return { x: sum.x / points.length, z: sum.z / points.length }
+}
+
+function pointInPolygon(px: number, pz: number, polygon: { x: number; z: number }[]): boolean {
+  let inside = false
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const xi = polygon[i]?.x ?? 0
+    const zi = polygon[i]?.z ?? 0
+    const xj = polygon[j]?.x ?? 0
+    const zj = polygon[j]?.z ?? 0
+    const intersects = zi > pz !== zj > pz && px < ((xj - xi) * (pz - zi)) / ((zj - zi) || 1e-12) + xi
+    if (intersects) inside = !inside
+  }
+  return inside
 }
 
 export function FloorplanVisualizer({ floor, onRoomClick, onFloorClick }: FloorplanVisualizerProps) {
-  const [hoveredRoom, setHoveredRoom] = useState<string | null>(null)
+  const [hoveredRoomId, setHoveredRoomId] = useState<string | null>(null)
+  const canvasRef = useRef<HTMLCanvasElement | null>(null)
+  const containerRef = useRef<HTMLDivElement | null>(null)
+  const viewRef = useRef<ViewTransform>({ scale: 1, tx: 0, tz: 0 })
+  const hoveredRoomRef = useRef<string | null>(null)
 
-  const { viewBox, scale, offset } = useMemo(() => {
-    console.log("[v0] Floor data:", floor)
-    console.log("[v0] Floor corners:", floor.corners)
-    console.log("[v0] Floor rooms:", floor.rooms)
+  const geometry = useMemo(() => buildFloorGeometry(floor), [floor])
 
-    // Filter out invalid corners and ensure they have the required position property
-    const validFloorCorners = (floor.corners || []).filter(
-      (c) => c && c.position && typeof c.position.x === "number" && typeof c.position.z === "number",
-    )
+  useEffect(() => {
+    setHoveredRoomId(null)
+  }, [floor.id])
 
-    const validRoomCorners = (floor.rooms || []).flatMap((room) =>
-      (room.corners || []).filter(
-        (c) => c && c.position && typeof c.position.x === "number" && typeof c.position.z === "number",
-      ),
-    )
+  useEffect(() => {
+    hoveredRoomRef.current = hoveredRoomId
+  }, [hoveredRoomId])
 
-    const allCorners = [...validFloorCorners, ...validRoomCorners]
+  const resizeCanvas = useCallback(() => {
+    const canvas = canvasRef.current
+    const container = containerRef.current
+    if (!canvas || !container || !geometry?.world) return
 
-    console.log("[v0] Valid corners count:", allCorners.length)
+    const rect = container.getBoundingClientRect()
+    const dpr = window.devicePixelRatio || 1
 
-    if (allCorners.length === 0) {
-      console.warn("[v0] No valid corners found, using default viewBox")
-      return { viewBox: "0 0 100 100", scale: 1, offset: { x: 0, z: 0 } }
+    canvas.width = Math.max(1, Math.round(rect.width * dpr))
+    canvas.height = Math.max(1, Math.round(rect.height * dpr))
+
+    const ctx = canvas.getContext("2d")
+    if (!ctx) return
+
+    const view = fitView(rect.width, rect.height, geometry.world)
+    viewRef.current = view
+
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+    drawCanvas(ctx, canvas, geometry.rooms, geometry.world, view, hoveredRoomRef.current)
+  }, [geometry])
+
+  useEffect(() => {
+    resizeCanvas()
+  }, [resizeCanvas])
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas || !geometry?.world) return
+
+    const ctx = canvas.getContext("2d")
+    if (!ctx) return
+
+    drawCanvas(ctx, canvas, geometry.rooms, geometry.world, viewRef.current, hoveredRoomId)
+  }, [geometry, hoveredRoomId])
+
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container || !geometry?.world) return
+
+    const observer = new ResizeObserver(() => {
+      resizeCanvas()
+    })
+
+    observer.observe(container)
+    return () => observer.disconnect()
+  }, [geometry, resizeCanvas])
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas || !geometry?.world) return
+
+    const handleMove = (event: MouseEvent) => {
+      const rect = canvas.getBoundingClientRect()
+      const sx = event.clientX - rect.left
+      const sy = event.clientY - rect.top
+      const { world } = geometry
+      const view = viewRef.current
+      const wx = toWorldX(sx, view, world)
+      const wz = toWorldZ(sy, view, world)
+      const room = pickRoomGeometry(wx, wz, geometry.rooms)
+      setHoveredRoomId(room?.room.archiId ?? null)
     }
 
-    const xCoords = allCorners.map((c) => c.position.x)
-    const zCoords = allCorners.map((c) => c.position.z)
-
-    const minX = Math.min(...xCoords)
-    const maxX = Math.max(...xCoords)
-    const minZ = Math.min(...zCoords)
-    const maxZ = Math.max(...zCoords)
-
-    const width = maxX - minX
-    const height = maxZ - minZ
-
-    const padding = Math.max(width, height) * 0.1
-    const viewBoxWidth = width + padding * 2
-    const viewBoxHeight = height + padding * 2
-
-    return {
-      viewBox: `${minX - padding} ${minZ - padding} ${viewBoxWidth} ${viewBoxHeight}`,
-      scale: Math.min(viewBoxWidth, viewBoxHeight) / 100,
-      offset: { x: minX, z: minZ },
+    const handleLeave = () => {
+      setHoveredRoomId(null)
     }
-  }, [floor])
 
-  const floorPolygonPoints = useMemo(() => {
-    const validCorners = (floor.corners || []).filter(
-      (c) => c && c.position && typeof c.position.x === "number" && typeof c.position.z === "number",
-    )
-    return validCorners.map((corner) => `${corner.position.x},${corner.position.z}`).join(" ")
-  }, [floor.corners])
-
-  const getRoomPolygonPoints = (room: FloorplanRoom) => {
-    const validCorners = (room.corners || []).filter(
-      (c) => c && c.position && typeof c.position.x === "number" && typeof c.position.z === "number",
-    )
-    return validCorners.map((corner) => `${corner.position.x},${corner.position.z}`).join(" ")
-  }
-
-  const getRoomCenter = (room: FloorplanRoom) => {
-    const validCorners = (room.corners || []).filter(
-      (c) => c && c.position && typeof c.position.x === "number" && typeof c.position.z === "number",
-    )
-
-    if (validCorners.length === 0) return { x: 0, z: 0 }
-
-    const sumX = validCorners.reduce((sum, c) => sum + c.position.x, 0)
-    const sumZ = validCorners.reduce((sum, c) => sum + c.position.z, 0)
-
-    return {
-      x: sumX / validCorners.length,
-      z: sumZ / validCorners.length,
+    const handleClick = (event: MouseEvent) => {
+      const rect = canvas.getBoundingClientRect()
+      const sx = event.clientX - rect.left
+      const sy = event.clientY - rect.top
+      const { world } = geometry
+      const view = viewRef.current
+      const wx = toWorldX(sx, view, world)
+      const wz = toWorldZ(sy, view, world)
+      const room = pickRoomGeometry(wx, wz, geometry.rooms)
+      if (room) {
+        onRoomClick(room.room)
+      } else {
+        onFloorClick()
+      }
     }
-  }
 
-  const validRooms = (floor.rooms || []).filter((room) => {
-    const validCorners = (room.corners || []).filter(
-      (c) => c && c.position && typeof c.position.x === "number" && typeof c.position.z === "number",
-    )
-    return validCorners.length >= 3 // Need at least 3 corners to make a polygon
-  })
+    canvas.addEventListener("mousemove", handleMove)
+    canvas.addEventListener("mouseleave", handleLeave)
+    canvas.addEventListener("click", handleClick)
+
+    return () => {
+      canvas.removeEventListener("mousemove", handleMove)
+      canvas.removeEventListener("mouseleave", handleLeave)
+      canvas.removeEventListener("click", handleClick)
+    }
+  }, [geometry, onFloorClick, onRoomClick])
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    canvas.style.cursor = hoveredRoomId ? "pointer" : "default"
+  }, [hoveredRoomId])
+
+  const roomsForList = useMemo(() => geometry?.rooms?.map((room) => room.room) ?? [], [geometry])
 
   return (
     <div className="space-y-4">
@@ -105,88 +182,36 @@ export function FloorplanVisualizer({ floor, onRoomClick, onFloorClick }: Floorp
           onClick={onFloorClick}
           className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
         >
-          층 전체 선택
+          층 전 선택
         </button>
       </div>
 
       <div className="overflow-hidden rounded-lg border bg-card">
-        <svg viewBox={viewBox} className="h-auto w-full" style={{ maxHeight: "500px" }}>
-          {floorPolygonPoints && (
-            <polygon
-              points={floorPolygonPoints}
-              fill="hsl(var(--muted))"
-              stroke="hsl(var(--border))"
-              strokeWidth={scale * 2}
-              className="cursor-pointer transition-colors hover:fill-muted/80"
-              onClick={onFloorClick}
-            />
-          )}
-
-          {validRooms.map((room) => {
-            const center = getRoomCenter(room)
-            const isHovered = hoveredRoom === room.archiId
-            const polygonPoints = getRoomPolygonPoints(room)
-
-            if (!polygonPoints) return null
-
-            return (
-              <g key={room.archiId}>
-                <polygon
-                  points={polygonPoints}
-                  fill={isHovered ? "hsl(var(--primary) / 0.3)" : "hsl(var(--background))"}
-                  stroke="hsl(var(--primary))"
-                  strokeWidth={scale * (isHovered ? 3 : 1.5)}
-                  className="cursor-pointer transition-all"
-                  onClick={() => onRoomClick(room)}
-                  onMouseEnter={() => setHoveredRoom(room.archiId)}
-                  onMouseLeave={() => setHoveredRoom(null)}
-                />
-
-                <text
-                  x={center.x}
-                  y={center.z}
-                  textAnchor="middle"
-                  dominantBaseline="middle"
-                  fontSize={scale * 8}
-                  fill="hsl(var(--foreground))"
-                  className="pointer-events-none select-none font-medium"
-                  style={{
-                    textShadow: "0 0 3px hsl(var(--background))",
-                  }}
-                >
-                  {room.title}
-                </text>
-
-                <text
-                  x={center.x}
-                  y={center.z + scale * 10}
-                  textAnchor="middle"
-                  dominantBaseline="middle"
-                  fontSize={scale * 6}
-                  fill="hsl(var(--muted-foreground))"
-                  className="pointer-events-none select-none"
-                  style={{
-                    textShadow: "0 0 3px hsl(var(--background))",
-                  }}
-                >
-                  {room.area.toFixed(1)}m²
-                </text>
-              </g>
-            )
-          })}
-        </svg>
+        {geometry && geometry.rooms.length ? (
+          <div
+            ref={containerRef}
+            className="relative w-full"
+            style={{ minHeight: "320px", height: "min(500px, 60vh)" }}
+          >
+            <canvas ref={canvasRef} className="h-full w-full" />
+          </div>
+        ) : (
+          <div className="flex h-64 items-center justify-center text-sm text-muted-foreground">
+            표시할 수 있는 방 정보가 없습니다.
+          </div>
+        )}
       </div>
 
       <div className="grid gap-2 sm:grid-cols-2">
-        {validRooms.map((room) => (
+        {roomsForList.map((room) => (
           <button
             key={room.archiId}
             onClick={() => onRoomClick(room)}
-            onMouseEnter={() => setHoveredRoom(room.archiId)}
-            onMouseLeave={() => setHoveredRoom(null)}
+            onMouseEnter={() => setHoveredRoomId(room.archiId)}
+            onMouseLeave={() => setHoveredRoomId(null)}
             className={cn(
               "rounded-md border p-3 text-left transition-colors",
-              hoveredRoom === room.archiId ? "border-primary bg-primary/10" : "hover:border-primary/50 hover:bg-accent",
+              hoveredRoomId === room.archiId ? "border-primary bg-primary/10" : "hover:border-primary/50 hover:bg-accent",
             )}
           >
             <p className="font-medium">{room.title}</p>
@@ -198,4 +223,205 @@ export function FloorplanVisualizer({ floor, onRoomClick, onFloorClick }: Floorp
       </div>
     </div>
   )
+}
+
+interface FloorplanVisualizerProps {
+  floor: Floor
+  onRoomClick: (room: FloorplanRoom) => void
+  onFloorClick: () => void
+}
+
+function buildFloorGeometry(
+  floor: Floor,
+): { world: WorldBounds; rooms: RoomGeometry[] } | null {
+  const allPoints: { x: number; z: number }[] = []
+  const cornerPositions = new Map<string, { x: number; z: number }>()
+
+  const recordPoint = (point: { x: number; z: number } | null | undefined) => {
+    if (!point || !Number.isFinite(point.x) || !Number.isFinite(point.z)) return null
+    allPoints.push(point)
+    return point
+  }
+
+  for (const corner of floor.corners ?? []) {
+    const position = corner?.position
+    if (!position || !Number.isFinite(position.x) || !Number.isFinite(position.z)) continue
+    const pos = { x: position.x, z: position.z }
+    cornerPositions.set(corner.archiId, pos)
+    recordPoint(pos)
+  }
+
+  const rooms: RoomGeometry[] = []
+
+  for (const room of floor.rooms ?? []) {
+    const rawPoints: ({ x: number; z: number } | null)[] = []
+
+    for (const corner of room.corners ?? []) {
+      if (typeof corner === "string") {
+        rawPoints.push(cornerPositions.get(corner) ?? null)
+        continue
+      }
+
+      const pos = corner?.position
+      if (pos && Number.isFinite(pos.x) && Number.isFinite(pos.z)) {
+        const normalized = { x: pos.x, z: pos.z }
+        if (corner.archiId) {
+          cornerPositions.set(corner.archiId, normalized)
+        }
+        rawPoints.push(normalized)
+      } else {
+        rawPoints.push(null)
+      }
+    }
+
+    const cleaned: { x: number; z: number }[] = []
+    for (const point of rawPoints) {
+      if (!point) continue
+      const last = cleaned[cleaned.length - 1]
+      if (!samePoint(last, point)) {
+        cleaned.push(point)
+      }
+    }
+
+    if (cleaned.length > 2 && samePoint(cleaned[0], cleaned[cleaned.length - 1])) {
+      cleaned.pop()
+    }
+
+    if (cleaned.length < 3) continue
+
+    cleaned.forEach(recordPoint)
+
+    rooms.push({
+      room,
+      points: cleaned,
+      center: centroid(cleaned),
+    })
+  }
+
+  if (allPoints.length === 0) return null
+
+  const xs = allPoints.map((p) => p.x)
+  const zs = allPoints.map((p) => p.z)
+
+  const minX = Math.min(...xs)
+  const maxX = Math.max(...xs)
+  const minZ = Math.min(...zs)
+  const maxZ = Math.max(...zs)
+
+  return {
+    world: { minX, maxX, minZ, maxZ },
+    rooms,
+  }
+}
+
+function fitView(width: number, height: number, world: WorldBounds): ViewTransform {
+  const spanX = Math.max(1e-9, world.maxX - world.minX)
+  const spanZ = Math.max(1e-9, world.maxZ - world.minZ)
+  const scale = Math.min(width / spanX, height / spanZ)
+  const centerX = world.minX + spanX / 2
+  const centerZ = world.minZ + spanZ / 2
+  const screenCenterX = (centerX - world.minX) * scale
+  const screenCenterZ = (centerZ - world.minZ) * scale
+  return {
+    scale,
+    tx: width / 2 - screenCenterX,
+    tz: height / 2 - screenCenterZ,
+  }
+}
+
+function toScreenX(x: number, view: ViewTransform, world: WorldBounds): number {
+  return (x - world.minX) * view.scale + view.tx
+}
+
+function toScreenY(z: number, view: ViewTransform, world: WorldBounds): number {
+  return (z - world.minZ) * view.scale + view.tz
+}
+
+function toWorldX(screenX: number, view: ViewTransform, world: WorldBounds): number {
+  return (screenX - view.tx) / view.scale + world.minX
+}
+
+function toWorldZ(screenY: number, view: ViewTransform, world: WorldBounds): number {
+  return (screenY - view.tz) / view.scale + world.minZ
+}
+
+function pickRoomGeometry(wx: number, wz: number, rooms: RoomGeometry[]): RoomGeometry | null {
+  for (let i = rooms.length - 1; i >= 0; i--) {
+    if (pointInPolygon(wx, wz, rooms[i].points)) {
+      return rooms[i]
+    }
+  }
+  return null
+}
+
+function drawCanvas(
+  ctx: CanvasRenderingContext2D,
+  canvas: HTMLCanvasElement,
+  rooms: RoomGeometry[],
+  world: WorldBounds,
+  view: ViewTransform,
+  hoveredRoomId: string | null,
+) {
+  const dpr = window.devicePixelRatio || 1
+  const width = canvas.width / dpr
+  const height = canvas.height / dpr
+
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+  ctx.clearRect(0, 0, width, height)
+
+  for (const geometry of rooms) {
+    if (geometry.room.archiId === hoveredRoomId) continue
+    drawRoom(ctx, geometry, view, world, false)
+  }
+
+  if (hoveredRoomId) {
+    const hovered = rooms.find((room) => room.room.archiId === hoveredRoomId)
+    if (hovered) {
+      drawRoom(ctx, hovered, view, world, true)
+    }
+  }
+
+  for (const geometry of rooms) {
+    drawLabel(ctx, geometry, view, world)
+  }
+}
+
+function drawRoom(
+  ctx: CanvasRenderingContext2D,
+  geometry: RoomGeometry,
+  view: ViewTransform,
+  world: WorldBounds,
+  hovered: boolean,
+) {
+  if (geometry.points.length < 3) return
+
+  ctx.beginPath()
+  geometry.points.forEach((point, index) => {
+    const sx = toScreenX(point.x, view, world)
+    const sy = toScreenY(point.z, view, world)
+    if (index === 0) {
+      ctx.moveTo(sx, sy)
+    } else {
+      ctx.lineTo(sx, sy)
+    }
+  })
+  ctx.closePath()
+
+  ctx.fillStyle = hovered ? ROOM_FILL_COLOR_HOVER : ROOM_FILL_COLOR
+  ctx.fill()
+
+  ctx.lineWidth = hovered ? ROOM_STROKE_WIDTH_HOVER : ROOM_STROKE_WIDTH
+  ctx.strokeStyle = ROOM_STROKE_COLOR
+  ctx.stroke()
+}
+
+function drawLabel(ctx: CanvasRenderingContext2D, geometry: RoomGeometry, view: ViewTransform, world: WorldBounds) {
+  const sx = toScreenX(geometry.center.x, view, world)
+  const sy = toScreenY(geometry.center.z, view, world)
+
+  ctx.fillStyle = "rgba(15, 23, 42, 0.95)"
+  ctx.font = "600 12px ui-sans-serif, system-ui, -apple-system, 'Segoe UI'"
+  ctx.textAlign = "center"
+  ctx.textBaseline = "middle"
+  ctx.fillText(geometry.room.title, sx, sy)
 }
