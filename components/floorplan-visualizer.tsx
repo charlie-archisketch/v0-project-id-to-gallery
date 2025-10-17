@@ -29,6 +29,59 @@ const ROOM_STROKE_WIDTH = 2
 const ROOM_STROKE_WIDTH_HOVER = 2.5
 const ROOM_STROKE_WIDTH_SELECTED = 3
 
+const ROOM_TYPE_LABELS: Record<number, string> = {
+  0: "NONE",
+  1: "거실",
+  2: "다이닝",
+  3: "주방",
+  4: "침실",
+  5: "욕실",
+  6: "화장실",
+  7: "오피스",
+  8: "복도",
+  9: "다용도실",
+  10: "저장고",
+  11: "벽장",
+  12: "랜딩",
+  13: "다락방",
+  14: "발코니",
+  15: "정원",
+  16: "파티오",
+  17: "주차장",
+  18: "현관",
+  19: "차고",
+  20: "헛간",
+  21: "조형 기둥",
+  22: "기둥",
+  23: "드레스룸",
+  24: "붙박이장",
+  25: "거실&다이닝",
+  26: "미팅룸",
+  27: "테라스",
+  28: "아이방",
+  29: "지하층",
+  1000: "임원공간",
+  1001: "업무공간",
+  1002: "회의공간",
+  1003: "소셜공간",
+  1004: "지원공간",
+  1005: "제외공간",
+  1100: "거실",
+  1101: "주방",
+  1102: "침실",
+  1103: "서재",
+  1104: "아이방",
+  1105: "다용도실",
+  1106: "드레스룸",
+  1107: "팬트리",
+  1108: "다락방",
+  1109: "욕실",
+  1110: "화장실",
+  1111: "테라스",
+  1112: "현관",
+  1113: "복도",
+}
+
 function samePoint(a?: { x: number; z: number } | null, b?: { x: number; z: number } | null) {
   return !!a && !!b && a.x === b.x && a.z === b.z
 }
@@ -377,6 +430,10 @@ function drawCanvas(
       }
     }
   }
+
+  for (const geometry of rooms) {
+    drawLabel(ctx, geometry, view, world)
+  }
 }
 
 function drawRoom(
@@ -413,4 +470,30 @@ function drawRoom(
   }
   ctx.strokeStyle = ROOM_STROKE_COLOR
   ctx.stroke()
+}
+
+function drawLabel(
+  ctx: CanvasRenderingContext2D,
+  geometry: RoomGeometry,
+  view: ViewTransform,
+  world: WorldBounds,
+) {
+  const label = getRoomLabel(geometry.room)
+  if (!label) return
+
+  const sx = toScreenX(geometry.center.x, view, world)
+  const sy = toScreenY(geometry.center.z, view, world)
+
+  ctx.fillStyle = "rgba(15, 23, 42, 0.95)"
+  ctx.font = "600 12px ui-sans-serif, system-ui, -apple-system, 'Segoe UI'"
+  ctx.textAlign = "center"
+  ctx.textBaseline = "middle"
+  ctx.fillText(label, sx, sy)
+}
+
+function getRoomLabel(room: FloorplanRoom): string | null {
+  if (!room.type) return null
+  const parsed = Number.parseInt(room.type, 10)
+  if (!Number.isFinite(parsed)) return null
+  return ROOM_TYPE_LABELS[parsed] ?? null
 }
