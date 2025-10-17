@@ -1,0 +1,71 @@
+[
+  {
+    "id": "68dca95adba1e624429320a6",
+    "archiId": "54197c63-7782-4c47-89ae-9e2bd08fd52f",
+    "title": "Floor 1",
+    "floorplanImage": null,
+    "floorplanImageScale": null,
+    "fpImageScale": null,
+    "area": 172.79,
+    "dimensions": {
+      "min": { "x": -50000.0, "y": 0.0, "z": -50000.0 },
+      "max": { "x": 50000.0, "y": 40000.0, "z": 50000.0 }
+    },
+    "corners": [
+      {
+        "archiId": "0e5eb16a-0b2e-04fc-e868-976a9569d31e",
+        "position": { "x": 35155.26084767134, "y": 0.0, "z": 32247.90802934773 }
+      },
+      {
+        "archiId": "130b6150-be03-fa6a-5540-1db4091fe0c5",
+        "position": { "x": 34203.61684048339, "y": 0.0, "z": 32965.0818993944 }
+      },
+      {
+        "archiId": "79138cd9-28b3-a1c3-6474-8f991db8b722",
+        "position": { "x": 32732.194754636257, "y": 0.0, "z": 30240.472715713076 }
+      },
+      {
+        "archiId": "e4373901-c0ca-64d7-46b9-65850e5782aa",
+        "position": { "x": 32732.194754636257, "y": 0.0, "z": 31246.459429759252 }
+      }
+    ],
+    "rooms": [
+      {
+        "archiId": "b4c0f6f0-3a4e-4d29-8e3a-1234567890ab",
+        "title": "거실",
+        "area": 45.5,
+        "type": "Living Room",
+        "corners": [
+          { "archiId": "c1", "position": { "x": 33000, "y": 0, "z": 30500 } },
+          { "archiId": "c2", "position": { "x": 34500, "y": 0, "z": 30500 } },
+          { "archiId": "c3", "position": { "x": 34500, "y": 0, "z": 32000 } },
+          { "archiId": "c4", "position": { "x": 33000, "y": 0, "z": 32000 } }
+        ]
+      },
+      {
+        "archiId": "a5d1e7g2-4b5f-5e40-9f4b-2345678901bc",
+        "title": "주방",
+        "area": 25.3,
+        "type": "Kitchen",
+        "corners": [
+          { "archiId": "c5", "position": { "x": 32800, "y": 0, "z": 30500 } },
+          { "archiId": "c6", "position": { "x": 33000, "y": 0, "z": 30500 } },
+          { "archiId": "c7", "position": { "x": 33000, "y": 0, "z": 31500 } },
+          { "archiId": "c8", "position": { "x": 32800, "y": 0, "z": 31500 } }
+        ]
+      },
+      {
+        "archiId": "c6e2f8h3-5c6g-6f51-0g5c-3456789012cd",
+        "title": "침실1",
+        "area": 35.2,
+        "type": "Bedroom",
+        "corners": [
+          { "archiId": "c9", "position": { "x": 34500, "y": 0, "z": 30500 } },
+          { "archiId": "c10", "position": { "x": 35100, "y": 0, "z": 30500 } },
+          { "archiId": "c11", "position": { "x": 35100, "y": 0, "z": 31800 } },
+          { "archiId": "c12", "position": { "x": 34500, "y": 0, "z": 31800 } }
+        ]
+      }
+    ]
+  }
+]
