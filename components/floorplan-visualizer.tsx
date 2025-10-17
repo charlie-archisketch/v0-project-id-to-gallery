@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import type { Floor, FloorplanRoom } from "@/types/floorplan"
-import { cn } from "@/lib/utils"
 
 interface RoomGeometry {
   room: FloorplanRoom
@@ -28,6 +27,7 @@ const ROOM_FILL_COLOR_HOVER = "rgba(59, 130, 246, 0.35)"
 const ROOM_STROKE_COLOR = "rgba(59, 130, 246, 0.85)"
 const ROOM_STROKE_WIDTH = 2
 const ROOM_STROKE_WIDTH_HOVER = 2.5
+const ROOM_STROKE_WIDTH_SELECTED = 3
 
 function samePoint(a?: { x: number; z: number } | null, b?: { x: number; z: number } | null) {
   return !!a && !!b && a.x === b.x && a.z === b.z
@@ -55,7 +55,11 @@ function pointInPolygon(px: number, pz: number, polygon: { x: number; z: number 
   return inside
 }
 
-export function FloorplanVisualizer({ floor, onRoomClick, onFloorClick }: FloorplanVisualizerProps) {
+export function FloorplanVisualizer({
+  floor,
+  selectedRoomId = null,
+  onRoomSelect,
+}: FloorplanVisualizerProps) {
   const [hoveredRoomId, setHoveredRoomId] = useState<string | null>(null)
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const containerRef = useRef<HTMLDivElement | null>(null)
@@ -90,8 +94,16 @@ export function FloorplanVisualizer({ floor, onRoomClick, onFloorClick }: Floorp
     viewRef.current = view
 
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
-    drawCanvas(ctx, canvas, geometry.rooms, geometry.world, view, hoveredRoomRef.current)
-  }, [geometry])
+    drawCanvas(
+      ctx,
+      canvas,
+      geometry.rooms,
+      geometry.world,
+      view,
+      hoveredRoomRef.current,
+      selectedRoomId,
+    )
+  }, [geometry, selectedRoomId])
 
   useEffect(() => {
     resizeCanvas()
@@ -104,8 +116,16 @@ export function FloorplanVisualizer({ floor, onRoomClick, onFloorClick }: Floorp
     const ctx = canvas.getContext("2d")
     if (!ctx) return
 
-    drawCanvas(ctx, canvas, geometry.rooms, geometry.world, viewRef.current, hoveredRoomId)
-  }, [geometry, hoveredRoomId])
+    drawCanvas(
+      ctx,
+      canvas,
+      geometry.rooms,
+      geometry.world,
+      viewRef.current,
+      hoveredRoomId,
+      selectedRoomId,
+    )
+  }, [geometry, hoveredRoomId, selectedRoomId])
 
   useEffect(() => {
     const container = containerRef.current
@@ -148,11 +168,7 @@ export function FloorplanVisualizer({ floor, onRoomClick, onFloorClick }: Floorp
       const wx = toWorldX(sx, view, world)
       const wz = toWorldZ(sy, view, world)
       const room = pickRoomGeometry(wx, wz, geometry.rooms)
-      if (room) {
-        onRoomClick(room.room)
-      } else {
-        onFloorClick()
-      }
+      onRoomSelect?.(room?.room ?? null)
     }
 
     canvas.addEventListener("mousemove", handleMove)
@@ -164,7 +180,7 @@ export function FloorplanVisualizer({ floor, onRoomClick, onFloorClick }: Floorp
       canvas.removeEventListener("mouseleave", handleLeave)
       canvas.removeEventListener("click", handleClick)
     }
-  }, [geometry, onFloorClick, onRoomClick])
+  }, [geometry, onRoomSelect])
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -172,19 +188,9 @@ export function FloorplanVisualizer({ floor, onRoomClick, onFloorClick }: Floorp
     canvas.style.cursor = hoveredRoomId ? "pointer" : "default"
   }, [hoveredRoomId])
 
-  const roomsForList = useMemo(() => geometry?.rooms?.map((room) => room.room) ?? [], [geometry])
-
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold">{floor.title}</h3>
-        <button
-          onClick={onFloorClick}
-          className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-        >
-          층 전 선택
-        </button>
-      </div>
+      <h3 className="text-lg font-semibold">{floor.title}</h3>
 
       <div className="overflow-hidden rounded-lg border bg-card">
         {geometry && geometry.rooms.length ? (
@@ -201,34 +207,14 @@ export function FloorplanVisualizer({ floor, onRoomClick, onFloorClick }: Floorp
           </div>
         )}
       </div>
-
-      <div className="grid gap-2 sm:grid-cols-2">
-        {roomsForList.map((room) => (
-          <button
-            key={room.archiId}
-            onClick={() => onRoomClick(room)}
-            onMouseEnter={() => setHoveredRoomId(room.archiId)}
-            onMouseLeave={() => setHoveredRoomId(null)}
-            className={cn(
-              "rounded-md border p-3 text-left transition-colors",
-              hoveredRoomId === room.archiId ? "border-primary bg-primary/10" : "hover:border-primary/50 hover:bg-accent",
-            )}
-          >
-            <p className="font-medium">{room.title}</p>
-            <p className="text-sm text-muted-foreground">
-              {room.type} · {room.area.toFixed(2)}m²
-            </p>
-          </button>
-        ))}
-      </div>
     </div>
   )
 }
 
 interface FloorplanVisualizerProps {
   floor: Floor
-  onRoomClick: (room: FloorplanRoom) => void
-  onFloorClick: () => void
+  selectedRoomId?: string | null
+  onRoomSelect?: (room: FloorplanRoom | null) => void
 }
 
 function buildFloorGeometry(
@@ -361,6 +347,7 @@ function drawCanvas(
   world: WorldBounds,
   view: ViewTransform,
   hoveredRoomId: string | null,
+  selectedRoomId: string | null,
 ) {
   const dpr = window.devicePixelRatio || 1
   const width = canvas.width / dpr
@@ -370,19 +357,25 @@ function drawCanvas(
   ctx.clearRect(0, 0, width, height)
 
   for (const geometry of rooms) {
-    if (geometry.room.archiId === hoveredRoomId) continue
-    drawRoom(ctx, geometry, view, world, false)
+    if (geometry.room.archiId === hoveredRoomId || geometry.room.archiId === selectedRoomId) continue
+    drawRoom(ctx, geometry, view, world, false, false)
   }
 
-  if (hoveredRoomId) {
-    const hovered = rooms.find((room) => room.room.archiId === hoveredRoomId)
-    if (hovered) {
-      drawRoom(ctx, hovered, view, world, true)
+  if (selectedRoomId) {
+    const selected = rooms.find((room) => room.room.archiId === selectedRoomId)
+    if (selected) {
+      const isHovered = selected.room.archiId === hoveredRoomId
+      drawRoom(ctx, selected, view, world, isHovered, true)
     }
   }
 
-  for (const geometry of rooms) {
-    drawLabel(ctx, geometry, view, world)
+  if (hoveredRoomId) {
+    if (hoveredRoomId !== selectedRoomId) {
+      const hovered = rooms.find((room) => room.room.archiId === hoveredRoomId)
+      if (hovered) {
+        drawRoom(ctx, hovered, view, world, true, false)
+      }
+    }
   }
 }
 
@@ -392,6 +385,7 @@ function drawRoom(
   view: ViewTransform,
   world: WorldBounds,
   hovered: boolean,
+  selected: boolean,
 ) {
   if (geometry.points.length < 3) return
 
@@ -407,21 +401,16 @@ function drawRoom(
   })
   ctx.closePath()
 
-  ctx.fillStyle = hovered ? ROOM_FILL_COLOR_HOVER : ROOM_FILL_COLOR
+  ctx.fillStyle = hovered || selected ? ROOM_FILL_COLOR_HOVER : ROOM_FILL_COLOR
   ctx.fill()
 
-  ctx.lineWidth = hovered ? ROOM_STROKE_WIDTH_HOVER : ROOM_STROKE_WIDTH
+  if (selected) {
+    ctx.lineWidth = ROOM_STROKE_WIDTH_SELECTED
+  } else if (hovered) {
+    ctx.lineWidth = ROOM_STROKE_WIDTH_HOVER
+  } else {
+    ctx.lineWidth = ROOM_STROKE_WIDTH
+  }
   ctx.strokeStyle = ROOM_STROKE_COLOR
   ctx.stroke()
-}
-
-function drawLabel(ctx: CanvasRenderingContext2D, geometry: RoomGeometry, view: ViewTransform, world: WorldBounds) {
-  const sx = toScreenX(geometry.center.x, view, world)
-  const sy = toScreenY(geometry.center.z, view, world)
-
-  ctx.fillStyle = "rgba(15, 23, 42, 0.95)"
-  ctx.font = "600 12px ui-sans-serif, system-ui, -apple-system, 'Segoe UI'"
-  ctx.textAlign = "center"
-  ctx.textBaseline = "middle"
-  ctx.fillText(geometry.room.title, sx, sy)
 }

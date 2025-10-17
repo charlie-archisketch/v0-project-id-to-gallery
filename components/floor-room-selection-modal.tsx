@@ -1,8 +1,9 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Button } from "@/components/ui/button"
 import { FloorplanVisualizer } from "@/components/floorplan-visualizer"
 import type { Floor, FloorplanRoom } from "@/types/floorplan"
 
@@ -22,8 +23,27 @@ export function FloorRoomSelectionModal({
   isLoading,
 }: FloorRoomSelectionModalProps) {
   const [selectedFloorId, setSelectedFloorId] = useState<string>("")
+  const [selectedRoom, setSelectedRoom] = useState<{ floorId: string; room: FloorplanRoom } | null>(null)
 
-  const currentFloor = floors.find((f) => f.id === selectedFloorId) || floors[0]
+  const currentFloor = floors.find((f) => f.id === (selectedFloorId || floors[0]?.id)) || floors[0]
+
+  useEffect(() => {
+    if (!isOpen) {
+      setSelectedRoom(null)
+      setSelectedFloorId("")
+    }
+  }, [isOpen])
+
+  useEffect(() => {
+    if (selectedRoom && !floors.some((floor) => floor.id === selectedRoom.floorId)) {
+      setSelectedRoom(null)
+    }
+  }, [floors, selectedRoom])
+
+  const handleTabChange = (value: string) => {
+    setSelectedFloorId(value)
+    setSelectedRoom(null)
+  }
 
   const handleFloorSelect = (floor: Floor) => {
     onSelect({
@@ -41,6 +61,19 @@ export function FloorRoomSelectionModal({
       title: `${floorTitle} - ${room.title}`,
     })
     onClose()
+  }
+
+  const handleConfirmSelection = () => {
+    if (floors.length === 0) return
+    const fallbackFloor = currentFloor ?? floors[0]
+    if (!fallbackFloor) return
+
+    if (selectedRoom) {
+      const owningFloor = floors.find((floor) => floor.id === selectedRoom.floorId) ?? fallbackFloor
+      handleRoomSelect(selectedRoom.room, owningFloor.title)
+    } else {
+      handleFloorSelect(fallbackFloor)
+    }
   }
 
   return (
@@ -65,12 +98,16 @@ export function FloorRoomSelectionModal({
               <div className="p-4">
                 <FloorplanVisualizer
                   floor={floors[0]}
-                  onRoomClick={(room) => handleRoomSelect(room, floors[0].title)}
-                  onFloorClick={() => handleFloorSelect(floors[0])}
+                  selectedRoomId={
+                    selectedRoom?.floorId === floors[0].id ? selectedRoom.room.archiId : null
+                  }
+                  onRoomSelect={(room) =>
+                    setSelectedRoom(room ? { floorId: floors[0].id, room } : null)
+                  }
                 />
               </div>
             ) : (
-              <Tabs value={selectedFloorId || floors[0]?.id} onValueChange={setSelectedFloorId} className="w-full">
+              <Tabs value={selectedFloorId || floors[0]?.id} onValueChange={handleTabChange} className="w-full">
                 <TabsList className="w-full justify-start overflow-x-auto">
                   {floors.map((floor) => (
                     <TabsTrigger key={floor.id} value={floor.id}>
@@ -83,13 +120,23 @@ export function FloorRoomSelectionModal({
                   <TabsContent key={floor.id} value={floor.id} className="p-4">
                     <FloorplanVisualizer
                       floor={floor}
-                      onRoomClick={(room) => handleRoomSelect(room, floor.title)}
-                      onFloorClick={() => handleFloorSelect(floor)}
+                      selectedRoomId={
+                        selectedRoom?.floorId === floor.id ? selectedRoom.room.archiId : null
+                      }
+                      onRoomSelect={(room) =>
+                        setSelectedRoom(room ? { floorId: floor.id, room } : null)
+                      }
                     />
                   </TabsContent>
                 ))}
               </Tabs>
             )}
+          </div>
+        )}
+
+        {!isLoading && floors.length > 0 && (
+          <div className="mt-4 flex justify-end border-t border-border pt-4">
+            <Button onClick={handleConfirmSelection}>선택</Button>
           </div>
         )}
       </DialogContent>
