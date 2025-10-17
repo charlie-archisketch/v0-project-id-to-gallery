@@ -7,12 +7,14 @@ export interface FloorplanCorner {
   }
 }
 
+export type FloorplanCornerReference = FloorplanCorner | string
+
 export interface FloorplanRoom {
   archiId: string
   title: string
   area: number
   type: string
-  corners: FloorplanCorner[]
+  corners: FloorplanCornerReference[]
 }
 
 export interface Floor {
