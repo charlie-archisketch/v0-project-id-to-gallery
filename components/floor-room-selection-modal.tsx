@@ -94,10 +94,11 @@ export function FloorRoomSelectionModal({
           <div className="py-12 text-center text-muted-foreground">평면도 정보가 없습니다</div>
         ) : (
           <div className="flex flex-col gap-4" style={{ height: "calc(90vh - 12rem)" }}>
-            {floors.length > 1 && (
-              <div className="flex-shrink-0">
+            <div className="flex flex-shrink-0 items-center justify-between">
+              <h3 className="text-lg font-semibold">{currentFloor?.title}</h3>
+              {floors.length > 1 && (
                 <Select value={selectedFloorId || floors[0]?.id} onValueChange={handleFloorChange}>
-                  <SelectTrigger className="w-full">
+                  <SelectTrigger className="w-[200px]">
                     <SelectValue placeholder="층 선택" />
                   </SelectTrigger>
                   <SelectContent>
@@ -108,8 +109,8 @@ export function FloorRoomSelectionModal({
                     ))}
                   </SelectContent>
                 </Select>
-              </div>
-            )}
+              )}
+            </div>
 
             <div className="flex-1 overflow-y-auto">
               {currentFloor && (
@@ -117,6 +118,7 @@ export function FloorRoomSelectionModal({
                   floor={currentFloor}
                   selectedRoomId={selectedRoom?.floorId === currentFloor.id ? selectedRoom.room.archiId : null}
                   onRoomSelect={(room) => setSelectedRoom(room ? { floorId: currentFloor.id, room } : null)}
+                  showTitle={false}
                 />
               )}
             </div>

@@ -88,10 +88,7 @@ function samePoint(a?: { x: number; z: number } | null, b?: { x: number; z: numb
 
 function centroid(points: { x: number; z: number }[]): { x: number; z: number } {
   if (points.length === 0) return { x: 0, z: 0 }
-  const sum = points.reduce(
-    (acc, point) => ({ x: acc.x + point.x, z: acc.z + point.z }),
-    { x: 0, z: 0 },
-  )
+  const sum = points.reduce((acc, point) => ({ x: acc.x + point.x, z: acc.z + point.z }), { x: 0, z: 0 })
   return { x: sum.x / points.length, z: sum.z / points.length }
 }
 
@@ -102,7 +99,7 @@ function pointInPolygon(px: number, pz: number, polygon: { x: number; z: number 
     const zi = polygon[i]?.z ?? 0
     const xj = polygon[j]?.x ?? 0
     const zj = polygon[j]?.z ?? 0
-    const intersects = zi > pz !== zj > pz && px < ((xj - xi) * (pz - zi)) / ((zj - zi) || 1e-12) + xi
+    const intersects = zi > pz !== zj > pz && px < ((xj - xi) * (pz - zi)) / (zj - zi || 1e-12) + xi
     if (intersects) inside = !inside
   }
   return inside
@@ -112,6 +109,7 @@ export function FloorplanVisualizer({
   floor,
   selectedRoomId = null,
   onRoomSelect,
+  showTitle = true,
 }: FloorplanVisualizerProps) {
   const [hoveredRoomId, setHoveredRoomId] = useState<string | null>(null)
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
@@ -147,15 +145,7 @@ export function FloorplanVisualizer({
     viewRef.current = view
 
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
-    drawCanvas(
-      ctx,
-      canvas,
-      geometry.rooms,
-      geometry.world,
-      view,
-      hoveredRoomRef.current,
-      selectedRoomId,
-    )
+    drawCanvas(ctx, canvas, geometry.rooms, geometry.world, view, hoveredRoomRef.current, selectedRoomId)
   }, [geometry, selectedRoomId])
 
   useEffect(() => {
@@ -169,15 +159,7 @@ export function FloorplanVisualizer({
     const ctx = canvas.getContext("2d")
     if (!ctx) return
 
-    drawCanvas(
-      ctx,
-      canvas,
-      geometry.rooms,
-      geometry.world,
-      viewRef.current,
-      hoveredRoomId,
-      selectedRoomId,
-    )
+    drawCanvas(ctx, canvas, geometry.rooms, geometry.world, viewRef.current, hoveredRoomId, selectedRoomId)
   }, [geometry, hoveredRoomId, selectedRoomId])
 
   useEffect(() => {
@@ -243,7 +225,7 @@ export function FloorplanVisualizer({
 
   return (
     <div className="space-y-4">
-      <h3 className="text-lg font-semibold">{floor.title}</h3>
+      {showTitle && <h3 className="text-lg font-semibold">{floor.title}</h3>}
 
       <div className="overflow-hidden rounded-lg border bg-card">
         {geometry && geometry.rooms.length ? (
@@ -268,11 +250,10 @@ interface FloorplanVisualizerProps {
   floor: Floor
   selectedRoomId?: string | null
   onRoomSelect?: (room: FloorplanRoom | null) => void
+  showTitle?: boolean
 }
 
-function buildFloorGeometry(
-  floor: Floor,
-): { world: WorldBounds; rooms: RoomGeometry[] } | null {
+function buildFloorGeometry(floor: Floor): { world: WorldBounds; rooms: RoomGeometry[] } | null {
   const allPoints: { x: number; z: number }[] = []
   const cornerPositions = new Map<string, { x: number; z: number }>()
 
@@ -472,12 +453,7 @@ function drawRoom(
   ctx.stroke()
 }
 
-function drawLabel(
-  ctx: CanvasRenderingContext2D,
-  geometry: RoomGeometry,
-  view: ViewTransform,
-  world: WorldBounds,
-) {
+function drawLabel(ctx: CanvasRenderingContext2D, geometry: RoomGeometry, view: ViewTransform, world: WorldBounds) {
   const label = getRoomLabel(geometry.room)
   if (!label) return
 
