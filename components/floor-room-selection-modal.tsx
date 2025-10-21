@@ -93,22 +93,22 @@ export function FloorRoomSelectionModal({
         ) : floors.length === 0 ? (
           <div className="py-12 text-center text-muted-foreground">평면도 정보가 없습니다</div>
         ) : (
-          <div className="max-h-[calc(90vh-8rem)] overflow-y-auto">
+          <div className="flex flex-col" style={{ height: "calc(90vh - 12rem)" }}>
             {floors.length === 1 ? (
-              <div className="p-4">
+              <div className="flex-1 overflow-y-auto p-4">
                 <FloorplanVisualizer
                   floor={floors[0]}
-                  selectedRoomId={
-                    selectedRoom?.floorId === floors[0].id ? selectedRoom.room.archiId : null
-                  }
-                  onRoomSelect={(room) =>
-                    setSelectedRoom(room ? { floorId: floors[0].id, room } : null)
-                  }
+                  selectedRoomId={selectedRoom?.floorId === floors[0].id ? selectedRoom.room.archiId : null}
+                  onRoomSelect={(room) => setSelectedRoom(room ? { floorId: floors[0].id, room } : null)}
                 />
               </div>
             ) : (
-              <Tabs value={selectedFloorId || floors[0]?.id} onValueChange={handleTabChange} className="w-full">
-                <TabsList className="w-full justify-start overflow-x-auto">
+              <Tabs
+                value={selectedFloorId || floors[0]?.id}
+                onValueChange={handleTabChange}
+                className="flex flex-1 flex-col"
+              >
+                <TabsList className="w-full flex-shrink-0 justify-start overflow-x-auto">
                   {floors.map((floor) => (
                     <TabsTrigger key={floor.id} value={floor.id}>
                       {floor.title}
@@ -117,15 +117,11 @@ export function FloorRoomSelectionModal({
                 </TabsList>
 
                 {floors.map((floor) => (
-                  <TabsContent key={floor.id} value={floor.id} className="p-4">
+                  <TabsContent key={floor.id} value={floor.id} className="flex-1 overflow-y-auto p-4">
                     <FloorplanVisualizer
                       floor={floor}
-                      selectedRoomId={
-                        selectedRoom?.floorId === floor.id ? selectedRoom.room.archiId : null
-                      }
-                      onRoomSelect={(room) =>
-                        setSelectedRoom(room ? { floorId: floor.id, room } : null)
-                      }
+                      selectedRoomId={selectedRoom?.floorId === floor.id ? selectedRoom.room.archiId : null}
+                      onRoomSelect={(room) => setSelectedRoom(room ? { floorId: floor.id, room } : null)}
                     />
                   </TabsContent>
                 ))}
@@ -135,7 +131,7 @@ export function FloorRoomSelectionModal({
         )}
 
         {!isLoading && floors.length > 0 && (
-          <div className="mt-4 flex justify-end border-t border-border pt-4">
+          <div className="flex flex-shrink-0 justify-end border-t border-border pt-4">
             <Button onClick={handleConfirmSelection}>선택</Button>
           </div>
         )}
