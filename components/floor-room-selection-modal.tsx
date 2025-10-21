@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { FloorplanVisualizer } from "@/components/floorplan-visualizer"
 import type { Floor, FloorplanRoom } from "@/types/floorplan"
 
@@ -40,7 +40,7 @@ export function FloorRoomSelectionModal({
     }
   }, [floors, selectedRoom])
 
-  const handleTabChange = (value: string) => {
+  const handleFloorChange = (value: string) => {
     setSelectedFloorId(value)
     setSelectedRoom(null)
   }
@@ -93,40 +93,33 @@ export function FloorRoomSelectionModal({
         ) : floors.length === 0 ? (
           <div className="py-12 text-center text-muted-foreground">평면도 정보가 없습니다</div>
         ) : (
-          <div className="flex flex-col" style={{ height: "calc(90vh - 12rem)" }}>
-            {floors.length === 1 ? (
-              <div className="flex-1 overflow-y-auto p-4">
-                <FloorplanVisualizer
-                  floor={floors[0]}
-                  selectedRoomId={selectedRoom?.floorId === floors[0].id ? selectedRoom.room.archiId : null}
-                  onRoomSelect={(room) => setSelectedRoom(room ? { floorId: floors[0].id, room } : null)}
-                />
+          <div className="flex flex-col gap-4" style={{ height: "calc(90vh - 12rem)" }}>
+            {floors.length > 1 && (
+              <div className="flex-shrink-0">
+                <Select value={selectedFloorId || floors[0]?.id} onValueChange={handleFloorChange}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="층 선택" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {floors.map((floor) => (
+                      <SelectItem key={floor.id} value={floor.id}>
+                        {floor.title}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-            ) : (
-              <Tabs
-                value={selectedFloorId || floors[0]?.id}
-                onValueChange={handleTabChange}
-                className="flex flex-1 flex-col"
-              >
-                <TabsList className="w-full flex-shrink-0 justify-start overflow-x-auto">
-                  {floors.map((floor) => (
-                    <TabsTrigger key={floor.id} value={floor.id}>
-                      {floor.title}
-                    </TabsTrigger>
-                  ))}
-                </TabsList>
-
-                {floors.map((floor) => (
-                  <TabsContent key={floor.id} value={floor.id} className="flex-1 overflow-y-auto p-4">
-                    <FloorplanVisualizer
-                      floor={floor}
-                      selectedRoomId={selectedRoom?.floorId === floor.id ? selectedRoom.room.archiId : null}
-                      onRoomSelect={(room) => setSelectedRoom(room ? { floorId: floor.id, room } : null)}
-                    />
-                  </TabsContent>
-                ))}
-              </Tabs>
             )}
+
+            <div className="flex-1 overflow-y-auto">
+              {currentFloor && (
+                <FloorplanVisualizer
+                  floor={currentFloor}
+                  selectedRoomId={selectedRoom?.floorId === currentFloor.id ? selectedRoom.room.archiId : null}
+                  onRoomSelect={(room) => setSelectedRoom(room ? { floorId: currentFloor.id, room } : null)}
+                />
+              )}
+            </div>
           </div>
         )}
 
