@@ -8,6 +8,12 @@ import { FloorRoomSelectionModal } from "@/components/floor-room-selection-modal
 import type { Project } from "@/types/project"
 import type { FloorplanData } from "@/types/floorplan"
 
+const fetchWithNgrok = (input: RequestInfo | URL, init?: RequestInit) => {
+  const headers = new Headers(init?.headers)
+  headers.set("ngrok-skip-browser-warning", "1")
+  return fetch(input, { ...init, headers })
+}
+
 export default function Home() {
   const [isSearching, setIsSearching] = useState(false)
   const [projects, setProjects] = useState<Project[]>([])
@@ -31,7 +37,7 @@ export default function Home() {
 
     try {
       console.log("[v0] Fetching project details for:", projectId)
-      const response = await fetch(`http://localhost:8080/projects/${projectId}`)
+      const response = await fetchWithNgrok(`https://73177144d012.ngrok-free.app/projects/${projectId}`)
 
       if (!response.ok) {
         throw new Error("프로젝트를 찾을 수 없습니다")
@@ -45,7 +51,7 @@ export default function Home() {
       }
 
       console.log("[v0] Fetching floorplan from:", projectData.floorplanPath)
-      const floorplanResponse = await fetch(projectData.floorplanPath)
+      const floorplanResponse = await fetchWithNgrok(projectData.floorplanPath)
 
       if (!floorplanResponse.ok) {
         throw new Error("평면도 정보를 불러올 수 없습니다")
@@ -60,7 +66,7 @@ export default function Home() {
         console.log("[v0] Using mock floorplan data for preview")
         // Import mock data from the attachment
         try {
-          const mockResponse = await fetch("/floorplans-mock.json")
+          const mockResponse = await fetchWithNgrok("/floorplans-mock.json")
           if (mockResponse.ok) {
             const mockData = await mockResponse.json()
             setFloorplanData(mockData)
@@ -87,11 +93,11 @@ export default function Home() {
     try {
       const endpoint =
         selection.type === "floor"
-          ? `http://localhost:8080/projects/${selection.id}/similar-floor`
-          : `http://localhost:8080/projects/${selection.id}/similar-room`
+          ? `https://73177144d012.ngrok-free.app/projects/${selection.id}/similar-floor`
+          : `https://73177144d012.ngrok-free.app/projects/${selection.id}/similar-room`
 
       console.log("[v0] Searching similar items:", endpoint)
-      const response = await fetch(endpoint)
+      const response = await fetchWithNgrok(endpoint)
 
       if (!response.ok) {
         throw new Error(
@@ -119,7 +125,7 @@ export default function Home() {
 
     try {
       console.log("[v0] Fetching project details for:", projectId)
-      const response = await fetch(`http://localhost:8080/projects/${projectId}`)
+      const response = await fetchWithNgrok(`https://73177144d012.ngrok-free.app/projects/${projectId}`)
 
       if (!response.ok) {
         throw new Error("프로젝트 정보를 불러올 수 없습니다")
