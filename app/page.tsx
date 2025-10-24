@@ -8,6 +8,8 @@ import { FloorRoomSelectionModal } from "@/components/floor-room-selection-modal
 import type { Project } from "@/types/project"
 import type { FloorplanData } from "@/types/floorplan"
 
+const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:8080"
+
 const fetchWithNgrok = (input: RequestInfo | URL, init?: RequestInit) => {
   const headers = new Headers(init?.headers)
   headers.set("ngrok-skip-browser-warning", "1")
@@ -37,7 +39,7 @@ export default function Home() {
 
     try {
       console.log("[v0] Fetching project details for:", projectId)
-      const response = await fetchWithNgrok(`https://73177144d012.ngrok-free.app/projects/${projectId}`)
+      const response = await fetchWithNgrok(`${baseUrl}/projects/${projectId}`)
 
       if (!response.ok) {
         throw new Error("프로젝트를 찾을 수 없습니다")
@@ -93,8 +95,8 @@ export default function Home() {
     try {
       const endpoint =
         selection.type === "floor"
-          ? `https://73177144d012.ngrok-free.app/projects/${selection.id}/similar-floor`
-          : `https://73177144d012.ngrok-free.app/projects/${selection.id}/similar-room`
+          ? `${baseUrl}/projects/${selection.id}/similar-floor`
+          : `${baseUrl}/projects/${selection.id}/similar-room`
 
       console.log("[v0] Searching similar items:", endpoint)
       const response = await fetchWithNgrok(endpoint)
@@ -125,7 +127,7 @@ export default function Home() {
 
     try {
       console.log("[v0] Fetching project details for:", projectId)
-      const response = await fetchWithNgrok(`https://73177144d012.ngrok-free.app/projects/${projectId}`)
+      const response = await fetchWithNgrok(`${baseUrl}/projects/${projectId}`)
 
       if (!response.ok) {
         throw new Error("프로젝트 정보를 불러올 수 없습니다")
