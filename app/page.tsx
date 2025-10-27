@@ -87,6 +87,34 @@ export default function Home() {
     }
   }
 
+  const handleFileUpload = async (file: File) => {
+    setIsLoadingFloorplan(true)
+    setIsFloorModalOpen(true)
+    setFloorplanData([])
+    setCurrentProjectId("uploaded-file")
+
+    try {
+      console.log("[v0] Reading uploaded JSON file:", file.name)
+      const text = await file.text()
+      const jsonData: FloorplanData = JSON.parse(text)
+
+      // Validate that it's an array
+      if (!Array.isArray(jsonData)) {
+        throw new Error("올바른 평면도 JSON 형식이 아닙니다")
+      }
+
+      console.log("[v0] Parsed floorplan data:", jsonData)
+      setFloorplanData(jsonData)
+    } catch (err) {
+      console.error("[v0] Error parsing JSON:", err)
+      const errorMessage = err instanceof Error ? err.message : "JSON 파일을 읽을 수 없습니다"
+      setError(errorMessage)
+      setIsFloorModalOpen(false)
+    } finally {
+      setIsLoadingFloorplan(false)
+    }
+  }
+
   const handleFloorRoomSelect = async (selection: { type: "floor" | "room"; id: string; title: string }) => {
     setIsSearching(true)
     setError(null)
@@ -151,10 +179,10 @@ export default function Home() {
           <h1 className="mb-4 text-4xl font-bold tracking-tight text-foreground sm:text-5xl lg:text-6xl">
             프로젝트 탐색
           </h1>
-          <p className="text-lg text-muted-foreground">프로젝트 ID를 입력하여 층 또는 방을 선택하세요</p>
+          <p className="text-lg text-muted-foreground">프로젝트 ID를 입력하거나 JSON 파일을 업로드하세요</p>
         </div>
 
-        <SearchBar onSearch={handleProjectIdSearch} isLoading={isLoadingFloorplan} placeholder="프로젝트 ID 입력" />
+        <SearchBar onSearch={handleProjectIdSearch} onFileUpload={handleFileUpload} isLoading={isLoadingFloorplan} />
 
         <ProjectGallery
           projects={projects}
