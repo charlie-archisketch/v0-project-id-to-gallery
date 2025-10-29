@@ -203,7 +203,12 @@ export function FloorplanVisualizer({
       const wx = toWorldX(sx, view, world)
       const wz = toWorldZ(sy, view, world)
       const room = pickRoomGeometry(wx, wz, geometry.rooms)
-      onRoomSelect?.(room?.room ?? null)
+
+      if (room?.room.archiId === selectedRoomId) {
+        onRoomSelect?.(null)
+      } else {
+        onRoomSelect?.(room?.room ?? null)
+      }
     }
 
     canvas.addEventListener("mousemove", handleMove)
@@ -215,7 +220,7 @@ export function FloorplanVisualizer({
       canvas.removeEventListener("mouseleave", handleLeave)
       canvas.removeEventListener("click", handleClick)
     }
-  }, [geometry, onRoomSelect])
+  }, [geometry, onRoomSelect, selectedRoomId])
 
   useEffect(() => {
     const canvas = canvasRef.current
