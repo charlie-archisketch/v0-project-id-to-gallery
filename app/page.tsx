@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { SearchBar } from "@/components/search-bar"
+import { SearchHeader } from "@/components/search-header"
 import { ProjectGallery } from "@/components/project-gallery"
 import { ProjectDetailModal } from "@/components/project-detail-modal"
 import { FloorRoomSelectionModal } from "@/components/floor-room-selection-modal"
@@ -27,12 +27,15 @@ export default function Home() {
   const [floorplanData, setFloorplanData] = useState<FloorplanData>([])
   const [currentProjectId, setCurrentProjectId] = useState<string>("")
 
+  const [areaFilter, setAreaFilter] = useState<{ from?: number; to?: number }>({})
+
   const [selectedProject, setSelectedProject] = useState<Project | null>(null)
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false)
   const [isLoadingDetail, setIsLoadingDetail] = useState(false)
 
-  const handleProjectIdSearch = async (projectId: string) => {
+  const handleProjectIdSearch = async (projectId: string, areaFrom?: number, areaTo?: number) => {
     setCurrentProjectId(projectId)
+    setAreaFilter({ from: areaFrom, to: areaTo })
     setIsLoadingFloorplan(true)
     setIsFloorModalOpen(true)
     setFloorplanData([])
@@ -93,13 +96,21 @@ export default function Home() {
     setSearchedInfo(selection.title)
 
     try {
-      const endpoint =
+      const baseEndpoint =
         selection.type === "floor"
           ? `${baseUrl}/projects/${selection.id}/similar-floor`
           : `${baseUrl}/projects/${selection.id}/similar-room`
 
-      console.log("[v0] Searching similar items:", endpoint)
-      const response = await fetchWithNgrok(endpoint)
+      const url = new URL(baseEndpoint)
+      if (areaFilter.from !== undefined) {
+        url.searchParams.append("areaFrom", areaFilter.from.toString())
+      }
+      if (areaFilter.to !== undefined) {
+        url.searchParams.append("areaTo", areaFilter.to.toString())
+      }
+
+      console.log("[v0] Searching similar items:", url.toString())
+      const response = await fetchWithNgrok(url.toString())
 
       if (!response.ok) {
         throw new Error(
@@ -145,16 +156,14 @@ export default function Home() {
   }
 
   return (
-    <main className="min-h-screen bg-background">
-      <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
-        <div className="mb-12 text-center">
-          <h1 className="mb-4 text-4xl font-bold tracking-tight text-foreground sm:text-5xl lg:text-6xl">
-            프로젝트 탐색
-          </h1>
-          <p className="text-lg text-muted-foreground">프로젝트 ID를 입력하여 층 또는 방을 선택하세요</p>
-        </div>
+    <main className="bg-background">
+      <SearchHeader onSearch={handleProjectIdSearch} isLoading={isLoadingFloorplan} />
 
-        <SearchBar onSearch={handleProjectIdSearch} isLoading={isLoadingFloorplan} placeholder="프로젝트 ID 입력" />
+      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        <div className="mb-8 text-center">
+          <h1 className="mb-2 text-3xl font-bold tracking-tight text-foreground sm:text-4xl">프로젝트 탐색</h1>
+          <p className="text-sm text-muted-foreground">프로젝트 ID를 입력하여 층 또는 방을 선택하세요</p>
+        </div>
 
         <ProjectGallery
           projects={projects}
